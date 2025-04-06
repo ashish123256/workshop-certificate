@@ -6,13 +6,15 @@ import { getStorage } from "firebase/storage";
 import { getFunctions } from "firebase/functions";
 
 const firebaseConfig = {
-  apiKey: "",
-  authDomain: "",
-  projectId: "workshop-certificate",
-  storageBucket: "workshop-certificate.firebasestorage.app",
-  messagingSenderId: "55169835163",
-  appId: "",
-  measurementId: ""
+  // apiKey: "",
+  // authDomain: "",
+  // projectId: "workshop-certificate",
+  // storageBucket: "workshop-certificate.firebasestorage.app",
+  // messagingSenderId: "55169835163",
+  // appId: "",
+  // measurementId: ""
+
+  
 };
 
 // Initialize Firebase

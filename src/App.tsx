@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import Login from "./components/Auth/Login";
+import Signup from "./components/Auth/SignUp";
 import PrivateRoute from "./components/Auth/PrivateRoute";
 import Dashboard from "./components/Admin/Dashboard";
 import FeedbackForm from "./components/Feedback/FeedbackForm";
@@ -12,8 +13,9 @@ function App() {
       <Router>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
           <Route path="/unauthorized" element={<Unauthorized />} />
-          
+           
           {/* Regular authenticated routes */}
           <Route element={<PrivateRoute />}>
             <Route path="/feedback/:uniqueLink" element={<FeedbackForm />} />

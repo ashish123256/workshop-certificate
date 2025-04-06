@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../../firebase";
+import { auth, firestore } from "../../firebase";
+import { doc, updateDoc, getDoc } from "firebase/firestore";
 import { useAuth } from "../../contexts/AuthContext";
 
 const Login = () => {
@@ -14,22 +15,49 @@ const Login = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
     setLoading(true);
+    setError('');
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      // Refresh token to ensure claims are up-to-date
+      // 1. Authenticate user
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      // 2. Update last login timestamp in Firestore
+      if (user) {
+        await updateDoc(doc(firestore, "users", user.uid), {
+          lastLogin: new Date()
+        });
+      }
+
+      // 3. Force token refresh and get fresh claims
+      await user.getIdToken(true);
       await refreshToken();
-      navigate("/dashboard");
+
+      // 4. Check if user is admin and get their feedback link
+      const userDoc = await getDoc(doc(firestore, "users", user.uid));
+      const userData = userDoc.data();
+      
+      const isAdminUser = userData?.isAdmin || false;
+      const feedbackLink = userData?.feedbackLink || null;
+
+      // 5. Redirect based on user status
+      if (isAdminUser) {
+        navigate("/dashboard");
+      } else if (feedbackLink) {
+        navigate(`/feedback/${feedbackLink}`);
+      } else {
+        // If no feedback link exists (shouldn't happen for regular users)
+        navigate("/unauthorized");
+      }
+      
     } catch (err) {
-      setError("Failed to log in. Please check your credentials.");
+      setError(`Login failed: ${(err as Error).message}`);
       console.error("Login error:", err);
     } finally {
       setLoading(false);
     }
   };
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-lg shadow">
@@ -166,6 +194,16 @@ const Login = () => {
             </button>
           </div>
         </form>
+
+        <div className="text-center text-sm">
+          <span className="text-gray-600">Don't have an account?</span>{" "}
+          <Link
+            to="/signup"
+            className="font-medium text-blue-600 hover:text-blue-500"
+          >
+            Sign up
+          </Link>
+        </div>
       </div>
     </div>
   );

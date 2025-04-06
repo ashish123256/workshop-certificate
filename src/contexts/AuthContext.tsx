@@ -1,36 +1,65 @@
+// contexts/AuthContext.tsx
 import { createContext, useContext, useEffect, useState, useMemo } from "react";
-import { auth } from "../firebase";
+import { auth, firestore } from "../firebase";
 import { User, onAuthStateChanged, getIdTokenResult } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
+
+interface UserData {
+  email: string;
+  isAdmin: boolean;
+  displayName?: string;
+  createdAt?: Date;
+  lastLogin?: Date;
+  profileComplete?: boolean;
+}
 
 interface AuthContextType {
   user: User | null;
-  email: string | null;
+  userData: UserData | null;
   loading: boolean;
   isAdmin: boolean;
   error: Error | null;
   refreshToken: () => Promise<void>;
+  refreshUserData: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
-  email: null,
+  userData: null,
   loading: true,
   isAdmin: false,
   error: null,
   refreshToken: async () => {},
+  refreshUserData: async () => {},
 });
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [email, setEmail] = useState<string | null>(null);
+  const [userData, setUserData] = useState<UserData | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
+  const fetchUserData = async (userId: string): Promise<UserData | null> => {
+    try {
+      const userDoc = await getDoc(doc(firestore, "users", userId));
+      return userDoc.exists() ? (userDoc.data() as UserData) : null;
+    } catch (err) {
+      console.error("Error fetching user data:", err);
+      return null;
+    }
+  };
+
   const checkAdminStatus = async (user: User): Promise<boolean> => {
     try {
-      const idTokenResult = await user.getIdTokenResult(true);
-      return !!idTokenResult.claims.admin;
+      const idTokenResult = await getIdTokenResult(user, true);
+      const claimsAdmin = !!idTokenResult.claims.admin;
+      
+      // Also check Firestore in case claims haven't propagated
+      const data = await fetchUserData(user.uid);
+      const firestoreAdmin = data?.isAdmin || false;
+      
+      return claimsAdmin || firestoreAdmin;
     } catch (err) {
       console.error("Error checking admin status:", err);
       return false;
@@ -48,6 +77,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const refreshUserData = async () => {
+    if (!user) return;
+    try {
+      const data = await fetchUserData(user.uid);
+      setUserData(data);
+      
+      // Update admin status based on fresh data
+      if (data?.isAdmin !== undefined) {
+        setIsAdmin(data.isAdmin);
+      }
+    } catch (err) {
+      setError(err as Error);
+    }
+  };
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(
       auth,
@@ -58,18 +102,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
           if (currentUser) {
             const adminStatus = await checkAdminStatus(currentUser);
+            const userData = await fetchUserData(currentUser.uid);
+            
             setUser(currentUser);
-            setEmail(currentUser.email); // Set the email from Firebase user
+            setUserData(userData);
             setIsAdmin(adminStatus);
           } else {
             setUser(null);
-            setEmail(null);
+            setUserData(null);
             setIsAdmin(false);
           }
         } catch (err) {
           setError(err as Error);
           setUser(null);
-          setEmail(null);
+          setUserData(null);
           setIsAdmin(false);
         } finally {
           setLoading(false);
@@ -78,7 +124,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       (authError) => {
         setError(authError);
         setUser(null);
-        setEmail(null);
+        setUserData(null);
         setIsAdmin(false);
         setLoading(false);
       }
@@ -90,13 +136,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const value = useMemo(
     () => ({
       user,
-      email, // Include email in the context value
+      userData,
       loading,
       isAdmin,
       error,
       refreshToken,
+      refreshUserData,
+      checkAdminStatus
     }),
-    [user, email, loading, isAdmin, error] // Add email to dependencies
+    [user, userData, loading, isAdmin, error]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

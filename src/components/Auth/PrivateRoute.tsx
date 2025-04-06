@@ -1,38 +1,31 @@
-import { Navigate, Outlet, useLocation } from "react-router-dom";
+// components/Auth/PrivateRoute.tsx
 import { useAuth } from "../../contexts/AuthContext";
-import LoadingSpinner from "../Shared/LoadingSpinner";
+import { Navigate, Outlet } from "react-router-dom";
+import { useEffect } from "react";
 
-interface PrivateRouteProps {
-  adminOnly?: boolean;
-  redirectPath?: string;
-}
+ const PrivateRoute = ({ adminOnly = false }: { adminOnly?: boolean }) => {
+  const { user, loading, isAdmin, refreshToken } = useAuth();
 
-const PrivateRoute = ({
-  adminOnly = false,
-  redirectPath = "/login",
-}: PrivateRouteProps) => {
-  const { user, loading, isAdmin } = useAuth();
-  const location = useLocation();
+  useEffect(() => {
+    if (user) {
+      refreshToken();
+    }
+  }, [user]);
 
   if (loading) {
-    return <LoadingSpinner fullScreen />;
+    return <div>Loading...</div>;
   }
 
   if (!user) {
-    return <Navigate to={redirectPath} state={{ from: location }} replace />;
+    return <Navigate to="/login" replace />;
   }
 
   if (adminOnly && !isAdmin) {
-    return (
-      <Navigate
-        to="/unauthorized"
-        state={{ from: location, requiredRole: "admin" }}
-        replace
-      />
-    );
+    return <Navigate to="/unauthorized" replace />;
   }
 
   return <Outlet />;
 };
+
 
 export default PrivateRoute;
